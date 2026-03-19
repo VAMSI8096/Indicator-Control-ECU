@@ -1,11 +1,8 @@
-// ================== PIN DEFINITIONS ==================
 #define LEFT_BUTTON 2
 #define RIGHT_BUTTON 3
 
 #define LEFT_LED 9
 #define RIGHT_LED 10
-
-// ================== GLOBAL VARIABLES ==================
 typedef enum
 {
   STATE_IDLE,
@@ -18,12 +15,12 @@ State_t state = STATE_IDLE;
 
 unsigned long system_time = 0;
 
-// Scheduler flags
+// Scheduler
 uint8_t flag_100ms = 0;
 uint8_t flag_300ms = 0;
 uint8_t counter_300ms = 0;
 
-// Button handling
+// Button
 uint8_t left_count = 0;
 uint8_t right_count = 0;
 
@@ -31,13 +28,14 @@ uint8_t left_event = 0;
 uint8_t right_event = 0;
 uint8_t both_event = 0;
 
-// LED state
+uint8_t hazard_lock = 0;
+
+// LED
 uint8_t led_state = 0;
 
 // Timer
 unsigned long last_tick = 0;
 
-// ================== SETUP ==================
 void setup()
 {
   pinMode(LEFT_BUTTON, INPUT_PULLUP);
@@ -49,7 +47,6 @@ void setup()
   Serial.begin(9600);
 }
 
-// ================== TIMER ==================
 void Timer_Update()
 {
   if (millis() - last_tick >= 100)
@@ -60,13 +57,13 @@ void Timer_Update()
   }
 }
 
-// ================== BUTTON TASK ==================
+// ---------------- BUTTON ----------------
 void Button_Task()
 {
   uint8_t left = digitalRead(LEFT_BUTTON) == LOW;
   uint8_t right = digitalRead(RIGHT_BUTTON) == LOW;
 
-  // LEFT BUTTON
+  // LEFT
   if (left)
   {
     left_count++;
@@ -81,7 +78,7 @@ void Button_Task()
     left_count = 0;
   }
 
-  // RIGHT BUTTON
+  // RIGHT
   if (right)
   {
     right_count++;
@@ -96,14 +93,21 @@ void Button_Task()
     right_count = 0;
   }
 
-  // BOTH BUTTONS
-  if (left && right && left_count >= 10 && right_count >= 10)
+  // BOTH (only once)
+  if (left_count == 10 && right_count == 10 && !hazard_lock)
   {
     both_event = 1;
+    hazard_lock = 1;
+  }
+
+  // Reset lock when released
+  if (!left && !right)
+  {
+    hazard_lock = 0;
   }
 }
 
-// ================== INDICATOR LOGIC ==================
+// ---------------- STATE MACHINE ----------------
 void Indicator_Task()
 {
   switch (state)
@@ -127,7 +131,12 @@ void Indicator_Task()
     break;
 
   case STATE_LEFT:
-    if (left_event)
+    if (both_event)
+    {
+      state = STATE_HAZARD;
+      Log("HAZARD_ON");
+    }
+    else if (left_event)
     {
       state = STATE_IDLE;
       Log("LEFT_INDICATOR_OFF");
@@ -140,7 +149,12 @@ void Indicator_Task()
     break;
 
   case STATE_RIGHT:
-    if (right_event)
+    if (both_event)
+    {
+      state = STATE_HAZARD;
+      Log("HAZARD_ON");
+    }
+    else if (right_event)
     {
       state = STATE_IDLE;
       Log("RIGHT_INDICATOR_OFF");
@@ -166,7 +180,7 @@ void Indicator_Task()
   both_event = 0;
 }
 
-// ================== LED TASK ==================
+// ---------------- LED ----------------
 void LED_Task()
 {
   led_state = !led_state;
@@ -198,7 +212,7 @@ void LED_Task()
   }
 }
 
-// ================== LOGGER ==================
+// ---------------- LOG ----------------
 void Log(const char *msg)
 {
   Serial.print("[");
@@ -207,7 +221,7 @@ void Log(const char *msg)
   Serial.println(msg);
 }
 
-// ================== LOOP ==================
+// ---------------- LOOP ----------------
 void loop()
 {
   Timer_Update();
